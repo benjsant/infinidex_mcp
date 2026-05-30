@@ -1,21 +1,20 @@
 """Helpers communs aux modules de tools.
 
 - `OutBase` : base Pydantic v2 partagée par tous les schémas de sortie.
-- `client_for` : context manager qui ouvre un `InfiniDexClient` pour la durée
-  d'un appel de tool (pas de cache, pas d'état partagé — cf. CLAUDE.md).
+- `is_id` / `resolve_pokemon_id` : résolution nom (EN/FR) ou id vers un id.
+
+Le client HTTP est désormais *partagé* (créé au démarrage du serveur et injecté
+dans chaque `register`) : les tools l'utilisent directement, sans ouvrir de
+connexion par appel.
 """
 
 from __future__ import annotations
-
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, ErrorData
 from pydantic import BaseModel, ConfigDict
 
 from ..client import InfiniDexClient
-from ..config import Settings
 
 
 class OutBase(BaseModel):
@@ -28,16 +27,23 @@ class OutBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
-@asynccontextmanager
-async def client_for(settings: Settings) -> AsyncIterator[InfiniDexClient]:
-    """Ouvre un client HTTP InfiniDex le temps d'un appel de tool."""
-    async with InfiniDexClient(settings) as client:
-        yield client
-
-
 def is_id(value: str | int) -> bool:
     """True si `value` est un id (entier ou chaîne purement numérique)."""
     return isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+
+
+def _best_match(matches: list[dict], needle: str) -> dict:
+    """Choisit la meilleure correspondance : nom EN/FR exact, sinon le premier."""
+    low = needle.lower()
+    return next(
+        (
+            m
+            for m in matches
+            if (m.get("name_en") or "").lower() == low
+            or (m.get("name_fr") or "").lower() == low
+        ),
+        matches[0],
+    )
 
 
 async def resolve_pokemon_id(client: InfiniDexClient, name_or_id: str | int) -> int:
@@ -55,14 +61,4 @@ async def resolve_pokemon_id(client: InfiniDexClient, name_or_id: str | int) -> 
         raise McpError(
             ErrorData(code=INVALID_PARAMS, message=f"No Pokémon matching name '{needle}'")
         )
-    low = needle.lower()
-    best = next(
-        (
-            m
-            for m in matches
-            if (m.get("name_en") or "").lower() == low
-            or (m.get("name_fr") or "").lower() == low
-        ),
-        matches[0],
-    )
-    return int(best["id"])
+    return int(_best_match(matches, needle)["id"])

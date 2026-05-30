@@ -1,23 +1,23 @@
 """Tools Pokémon : get_pokemon, search_pokemon, list_pokemon.
 
 Schémas calés sur l'API réelle InfiniDex :
-  - GET /pokemon/{id}        -> PokemonDetail (stats à plat, types/abilities objets)
-  - GET /pokemon/search?q=   -> list[PokemonListItem]  (q : min 2 caractères)
-  - GET /pokemon/?limit&offset -> list[PokemonListItem]
-
-Il n'existe pas d'endpoint `/pokemon/by-name/{name}` : la résolution par nom
-passe par /pokemon/search puis un fetch détaillé, comme l'agent interne.
+  - GET /pokemon/{id}          -> PokemonDetail (stats à plat, types/abilities objets)
+  - GET /pokemon/search?q=     -> list[PokemonListItem]  (q : min 2 caractères)
+  - GET /pokemon/?limit&offset&filtres -> list[PokemonListItem]
+  - GET /pokemon/count?filtres -> int
 """
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from ..config import Settings
-from ._base import OutBase, client_for, is_id, resolve_pokemon_id
+from ..client import InfiniDexClient
+from ._base import OutBase, is_id, resolve_pokemon_id
+
+SortBy = Literal["id", "id_desc", "name_asc", "name_desc", "bst_asc", "bst_desc"]
 
 
 class TypeRef(OutBase):
@@ -76,11 +76,12 @@ class PokemonListItem(OutBase):
 class PokemonList(OutBase):
     """Page de résultats Pokémon."""
 
-    count: int = Field(description="Nombre d'éléments retournés")
+    count: int = Field(description="Nombre d'éléments sur cette page")
+    total: int | None = Field(default=None, description="Total correspondant aux filtres (toutes pages)")
     results: list[PokemonListItem] = Field(default_factory=list)
 
 
-def register(mcp: FastMCP, settings: Settings) -> None:
+def register(mcp: FastMCP, client: InfiniDexClient) -> None:
     """Enregistre les tools Pokémon sur le serveur MCP."""
 
     @mcp.tool(
@@ -97,13 +98,10 @@ def register(mcp: FastMCP, settings: Settings) -> None:
             Field(description="IF id (e.g. 25) or name EN/FR (e.g. 'Pikachu')"),
         ],
     ) -> PokemonOut:
-        async with client_for(settings) as client:
-            # Nom → id via /search ; un fetch détaillé suit (le /search ne
-            # renvoie pas stats/abilities).
-            pokemon_id = name_or_id if is_id(name_or_id) else await resolve_pokemon_id(
-                client, name_or_id
-            )
-            data = await client.get(f"/pokemon/{int(pokemon_id)}")
+        pokemon_id = name_or_id if is_id(name_or_id) else await resolve_pokemon_id(
+            client, name_or_id
+        )
+        data = await client.get(f"/pokemon/{int(pokemon_id)}")
         return PokemonOut.model_validate(data)
 
     @mcp.tool(
@@ -118,20 +116,40 @@ def register(mcp: FastMCP, settings: Settings) -> None:
             str, Field(description="Name or partial name (min 2 chars)", min_length=2)
         ],
     ) -> PokemonList:
-        async with client_for(settings) as client:
-            data = await client.get("/pokemon/search", params={"q": name})
-        return PokemonList(count=len(data), results=data)
+        data = await client.get("/pokemon/search", params={"q": name})
+        return PokemonList(count=len(data), total=len(data), results=data)
 
     @mcp.tool(
         description=(
-            "List Pokémon with pagination (ordered by IF id). Returns lightweight "
-            "entries. Use to browse the dex; combine limit/offset to page through."
+            "List Pokémon with pagination and optional filters. `total` gives the "
+            "full count matching the filters (all pages). Filter by type, "
+            "generation (1=Kanto, 3=Hoenn) and BST range; sort by id/name/bst. "
+            "Use to browse the dex or answer 'how many … ' questions."
         )
     )
     async def list_pokemon(
-        limit: Annotated[int, Field(description="Max items to return", ge=1, le=1000)] = 20,
+        limit: Annotated[int, Field(description="Max items per page", ge=1, le=1000)] = 20,
         offset: Annotated[int, Field(description="Items to skip (pagination)", ge=0)] = 0,
+        type_id: Annotated[int | None, Field(description="Filter by type id", ge=1)] = None,
+        generation_id: Annotated[
+            int | None, Field(description="Filter by generation (1=Kanto, 3=Hoenn)", ge=1)
+        ] = None,
+        min_bst: Annotated[int | None, Field(description="Minimum BST", ge=0)] = None,
+        max_bst: Annotated[int | None, Field(description="Maximum BST", ge=0)] = None,
+        sort_by: Annotated[SortBy, Field(description="Sort order")] = "id",
     ) -> PokemonList:
-        async with client_for(settings) as client:
-            data = await client.get("/pokemon/", params={"limit": limit, "offset": offset})
-        return PokemonList(count=len(data), results=data)
+        filters = {
+            k: v
+            for k, v in (
+                ("type_id", type_id),
+                ("generation_id", generation_id),
+                ("min_bst", min_bst),
+                ("max_bst", max_bst),
+            )
+            if v is not None
+        }
+        data = await client.get(
+            "/pokemon/", params={"limit": limit, "offset": offset, "sort_by": sort_by, **filters}
+        )
+        total = await client.get("/pokemon/count", params=filters)
+        return PokemonList(count=len(data), total=total, results=data)

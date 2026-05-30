@@ -7,13 +7,14 @@ Schémas calés sur l'API réelle :
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from ..config import Settings
-from ._base import OutBase, client_for, resolve_pokemon_id
+from ..client import InfiniDexClient
+from ._base import OutBase, resolve_pokemon_id
 
 
 class TypeRef(OutBase):
@@ -105,7 +106,7 @@ class TripleFusionOut(OutBase):
     abilities: list[TripleAbilityRef] = Field(default_factory=list)
 
 
-def register(mcp: FastMCP, settings: Settings) -> None:
+def register(mcp: FastMCP, client: InfiniDexClient) -> None:
     """Enregistre les tools de fusion sur le serveur MCP."""
 
     @mcp.tool(
@@ -121,10 +122,11 @@ def register(mcp: FastMCP, settings: Settings) -> None:
         head: Annotated[str | int, Field(description="Head Pokémon: IF id or name EN/FR")],
         body: Annotated[str | int, Field(description="Body Pokémon: IF id or name EN/FR")],
     ) -> FusionOut:
-        async with client_for(settings) as client:
-            head_id = await resolve_pokemon_id(client, head)
-            body_id = await resolve_pokemon_id(client, body)
-            data = await client.get(f"/fusion/{head_id}/{body_id}/full")
+        # Résolution des deux côtés en parallèle (noms -> ids).
+        head_id, body_id = await asyncio.gather(
+            resolve_pokemon_id(client, head), resolve_pokemon_id(client, body)
+        )
+        data = await client.get(f"/fusion/{head_id}/{body_id}/full")
         fusion = data.get("fusion", {})
         return FusionOut.model_validate(
             {
@@ -146,6 +148,5 @@ def register(mcp: FastMCP, settings: Settings) -> None:
             int, Field(description="Id of the triple fusion (1–23)", ge=1)
         ],
     ) -> TripleFusionOut:
-        async with client_for(settings) as client:
-            data = await client.get(f"/triple-fusions/{triple_fusion_id}")
+        data = await client.get(f"/triple-fusions/{triple_fusion_id}")
         return TripleFusionOut.model_validate(data)

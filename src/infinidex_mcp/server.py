@@ -7,8 +7,11 @@ Pydantic, et les transports stdio / SSE.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from mcp.server.fastmcp import FastMCP
 
+from .client import InfiniDexClient
 from .config import Settings, load_settings
 from .tools import register_all
 
@@ -17,8 +20,19 @@ def build_server(settings: Settings | None = None) -> FastMCP:
     """Construit le serveur MCP avec tous les tools enregistrés.
 
     `settings` est injectable pour les tests ; sinon lu depuis l'environnement.
+    Un unique `InfiniDexClient` (pool de connexions partagé) est créé ici et
+    fermé proprement à l'arrêt du serveur via le lifespan.
     """
     settings = settings or load_settings()
+    client = InfiniDexClient(settings)
+
+    @asynccontextmanager
+    async def lifespan(_server: FastMCP):
+        try:
+            yield
+        finally:
+            await client.aclose()
+
     mcp = FastMCP(
         name="infinidex",
         instructions=(
@@ -27,8 +41,9 @@ def build_server(settings: Settings | None = None) -> FastMCP:
             "ids are InfiniDex ids, not national dex ids."
         ),
         port=settings.mcp_port,
+        lifespan=lifespan,
     )
-    register_all(mcp, settings)
+    register_all(mcp, client)
     return mcp
 
 

@@ -11,13 +11,20 @@ from .conftest import BASE_URL
 
 def test_check_ok(monkeypatch, respx_mock):
     monkeypatch.setenv("INFINIDEX_URL", BASE_URL)
-    respx_mock.get(f"{BASE_URL}/").mock(return_value=httpx.Response(200))
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(return_value=httpx.Response(200, json=572))
     assert main(["--check"]) == 0
 
 
-def test_check_failure(monkeypatch, respx_mock):
+def test_check_unreachable(monkeypatch, respx_mock):
     monkeypatch.setenv("INFINIDEX_URL", BASE_URL)
-    respx_mock.get(f"{BASE_URL}/").mock(side_effect=httpx.ConnectError("down"))
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(side_effect=httpx.ConnectError("down"))
+    assert main(["--check"]) == 1
+
+
+def test_check_unauthorized(monkeypatch, respx_mock):
+    # 403 = clé manquante/invalide : exit non nul, message distinct.
+    monkeypatch.setenv("INFINIDEX_URL", BASE_URL)
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(return_value=httpx.Response(403))
     assert main(["--check"]) == 1
 
 

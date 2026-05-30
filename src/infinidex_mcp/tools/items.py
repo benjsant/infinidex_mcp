@@ -11,8 +11,8 @@ from typing import Annotated
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
-from ..config import Settings
-from ._base import OutBase, client_for
+from ..client import InfiniDexClient
+from ._base import OutBase
 
 
 class ItemLocationOut(OutBase):
@@ -37,7 +37,7 @@ class ItemOut(OutBase):
     locations: list[ItemLocationOut] = Field(default_factory=list)
 
 
-def register(mcp: FastMCP, settings: Settings) -> None:
+def register(mcp: FastMCP, client: InfiniDexClient) -> None:
     """Enregistre le tool objets sur le serveur MCP."""
 
     @mcp.tool(
@@ -50,6 +50,5 @@ def register(mcp: FastMCP, settings: Settings) -> None:
     async def get_item(
         item_id: Annotated[int, Field(description="InfiniDex id of the item", ge=1)],
     ) -> ItemOut:
-        async with client_for(settings) as client:
-            data = await client.get(f"/items/{item_id}")
+        data = await client.get(f"/items/{item_id}")
         return ItemOut.model_validate(data)

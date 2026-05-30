@@ -11,6 +11,7 @@ EXPECTED_TOOLS = {
     "get_fusion",
     "get_triple_fusion",
     "search_move",
+    "get_move",
     "get_move_tutors",
     "get_item",
 }
