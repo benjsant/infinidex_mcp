@@ -25,6 +25,7 @@ n'a **aucune dépendance** sur le runtime InfiniDex — juste son URL.
 | `get_move` | `GET /moves/{id}` (détail + description + TM) |
 | `get_move_tutors` | `GET /moves/{id}/tutors` |
 | `get_item` | `GET /items/{id}` |
+| `get_pokemon_locations` | `GET /pokemon/{id}/locations` (où trouver le Pokémon) |
 
 Chaque tool a un schéma d'entrée/sortie Pydantic v2 strict et une `description`
 exploitée par le LLM client.
@@ -38,7 +39,7 @@ Tout tourne en conteneur — aucune installation Python/`uv` sur ta machine. Le
 make build      # image runtime (serveur MCP), taguée infinidex-mcp:latest
 make test       # build dev + suite de tests
 make check      # vérifie la connexion à un InfiniDex local
-make run-sse    # serveur en transport SSE sur :3000
+make run-http   # serveur hosted (streamable-http) sur :3000
 make smoke      # liste les tools exposés
 ```
 
@@ -82,15 +83,17 @@ Voir [`examples/`](examples/). Exemple Claude Desktop / Code :
 |---|---|---|
 | `INFINIDEX_URL` | `http://localhost:58000` | URL de base de l'API InfiniDex |
 | `INFINIDEX_API_KEY` | *(vide)* | Envoyée en header `X-Internal-Key` si InfiniDex l'exige |
-| `INFINIDEX_MCP_TRANSPORT` | `stdio` | `stdio` (clients locaux) ou `sse` (hosted) |
-| `INFINIDEX_MCP_PORT` | `3000` | Port d'écoute SSE |
+| `INFINIDEX_MCP_TRANSPORT` | `stdio` | `stdio` (local) · `streamable-http` (hosted, recommandé) · `sse` (hosted, ancien) |
+| `INFINIDEX_MCP_HOST` | `127.0.0.1` | Hôte d'écoute en mode hosted (mettre `0.0.0.0` en conteneur) |
+| `INFINIDEX_MCP_PORT` | `3000` | Port d'écoute en mode hosted |
 
 ## CLI
 
 ```bash
-infinidex-mcp                  # serveur stdio (défaut)
-infinidex-mcp --transport sse  # serveur SSE
-infinidex-mcp --check          # teste la connexion à InfiniDex puis exit
+infinidex-mcp                              # serveur stdio (défaut)
+infinidex-mcp --transport streamable-http  # serveur hosted (recommandé)
+infinidex-mcp --transport sse              # serveur hosted (ancien transport)
+infinidex-mcp --check                      # teste connexion + auth puis exit
 ```
 
 ## Stack

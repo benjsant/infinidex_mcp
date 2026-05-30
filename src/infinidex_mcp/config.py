@@ -11,7 +11,9 @@ from typing import Literal
 from pydantic import Field, HttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-Transport = Literal["stdio", "sse"]
+# stdio : clients locaux (Claude Desktop/Code). streamable-http : mode hosted
+# moderne (recommandé). sse : ancien transport hosted, conservé pour compat.
+Transport = Literal["stdio", "sse", "streamable-http"]
 
 
 class Settings(BaseSettings):
@@ -33,7 +35,9 @@ class Settings(BaseSettings):
     # d'env est INFINIDEX_MCP_TRANSPORT.
     mcp_transport: Transport = Field(default="stdio")
 
-    # Port d'écoute, uniquement utilisé en transport SSE.
+    # Hôte et port d'écoute (transports hosted : sse / streamable-http).
+    # En conteneur, mettre l'hôte à 0.0.0.0 pour être joignable via -p.
+    mcp_host: str = Field(default="127.0.0.1")
     mcp_port: int = Field(default=3000, ge=1, le=65535)
 
     # Timeout (secondes) des requêtes HTTP vers InfiniDex.

@@ -7,7 +7,7 @@ IMAGE        := infinidex-mcp:latest
 DEV_IMAGE    := infinidex-mcp-dev:latest
 INFINIDEX_URL ?= http://host.docker.internal:58000
 
-.PHONY: build build-dev test check run-sse smoke clean
+.PHONY: build build-dev test check run-http run-sse smoke clean
 
 ## Build de l'image runtime (serveur MCP).
 build:
@@ -28,11 +28,18 @@ check: build
 	docker run --rm --add-host host.docker.internal:host-gateway \
 		-e INFINIDEX_URL=$(INFINIDEX_URL) $(IMAGE) --check
 
-## Démarre le serveur en transport SSE (port 3000).
+## Démarre le serveur hosted en transport streamable-http (recommandé, :3000).
+run-http: build
+	docker run --rm -p 3000:3000 --add-host host.docker.internal:host-gateway \
+		-e INFINIDEX_URL=$(INFINIDEX_URL) \
+		-e INFINIDEX_MCP_TRANSPORT=streamable-http -e INFINIDEX_MCP_HOST=0.0.0.0 \
+		$(IMAGE) --transport streamable-http
+
+## Démarre le serveur hosted en transport SSE (ancien, :3000).
 run-sse: build
 	docker run --rm -p 3000:3000 --add-host host.docker.internal:host-gateway \
 		-e INFINIDEX_URL=$(INFINIDEX_URL) \
-		-e INFINIDEX_MCP_TRANSPORT=sse \
+		-e INFINIDEX_MCP_TRANSPORT=sse -e INFINIDEX_MCP_HOST=0.0.0.0 \
 		$(IMAGE) --transport sse
 
 ## Smoke test : liste les tools exposés par le serveur.

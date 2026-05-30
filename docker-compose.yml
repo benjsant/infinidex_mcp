@@ -34,7 +34,23 @@ services:
       - "host.docker.internal:host-gateway"
     command: ["--check"]
 
-  # --- serveur hosted en transport SSE ---
+  # --- serveur hosted en transport streamable-http (recommandé) ---
+  http:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "${INFINIDEX_MCP_PORT:-3000}:3000"
+    environment:
+      INFINIDEX_URL: http://host.docker.internal:58000
+      INFINIDEX_MCP_TRANSPORT: streamable-http
+      INFINIDEX_MCP_HOST: 0.0.0.0
+      INFINIDEX_MCP_PORT: 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--transport", "streamable-http"]
+
+  # --- serveur hosted en transport SSE (ancien, conservé pour compat) ---
   sse:
     build:
       context: .
@@ -44,6 +60,7 @@ services:
     environment:
       INFINIDEX_URL: http://host.docker.internal:58000
       INFINIDEX_MCP_TRANSPORT: sse
+      INFINIDEX_MCP_HOST: 0.0.0.0
       INFINIDEX_MCP_PORT: 3000
     extra_hosts:
       - "host.docker.internal:host-gateway"

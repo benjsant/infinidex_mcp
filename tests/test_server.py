@@ -14,6 +14,7 @@ EXPECTED_TOOLS = {
     "get_move",
     "get_move_tutors",
     "get_item",
+    "get_pokemon_locations",
 }
 
 
