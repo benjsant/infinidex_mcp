@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "infinidex": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--add-host", "host.docker.internal:host-gateway",
+        "-e", "INFINIDEX_URL=http://host.docker.internal:58000",
+        "-e", "INFINIDEX_API_KEY=<votre INTERNAL_API_KEY, si InfiniDex l'exige>",
+        "infinidex-mcp:latest"
+      ]
+    }
+  }
+}

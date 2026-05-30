@@ -1,0 +1,50 @@
+# Workflow de dev 100% conteneurisé — aucune install sur le host.
+#
+#   docker compose build              # build l'image dev
+#   docker compose run --rm test      # lance la suite de tests
+#   docker compose run --rm check     # vérifie la connexion à InfiniDex
+#   docker compose run --rm sse       # démarre le serveur en transport SSE
+#
+# Le mode stdio (défaut) n'est pas un service compose : il est piloté par
+# le client MCP (Claude Desktop/Code) qui lance le conteneur lui-même.
+
+services:
+  # --- tests / dev : monte le code source pour itérer sans rebuild ---
+  test:
+    build:
+      context: .
+      target: dev
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    environment:
+      INFINIDEX_URL: http://host.docker.internal:58000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["pytest"]
+
+  # --- vérifie la connexion à un InfiniDex local ---
+  check:
+    build:
+      context: .
+      target: runtime
+    environment:
+      INFINIDEX_URL: http://host.docker.internal:58000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--check"]
+
+  # --- serveur hosted en transport SSE ---
+  sse:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "${INFINIDEX_MCP_PORT:-3000}:3000"
+    environment:
+      INFINIDEX_URL: http://host.docker.internal:58000
+      INFINIDEX_MCP_TRANSPORT: sse
+      INFINIDEX_MCP_PORT: 3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["--transport", "sse"]
