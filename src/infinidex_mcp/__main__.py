@@ -23,7 +23,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--transport",
-        choices=("stdio", "sse"),
+        choices=("stdio", "sse", "streamable-http"),
         default=None,
         help="Transport MCP (override INFINIDEX_MCP_TRANSPORT ; défaut stdio).",
     )

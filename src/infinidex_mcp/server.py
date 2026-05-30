@@ -40,6 +40,7 @@ def build_server(settings: Settings | None = None) -> FastMCP:
             "Pokémon, fusions, moves and items. Prefer these tools over guessing; "
             "ids are InfiniDex ids, not national dex ids."
         ),
+        host=settings.mcp_host,
         port=settings.mcp_port,
         lifespan=lifespan,
     )

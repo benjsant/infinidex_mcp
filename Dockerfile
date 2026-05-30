@@ -36,8 +36,11 @@ COPY pyproject.toml README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 
-# stdio par défaut (Claude Desktop / Code). SSE : override la commande.
+# stdio par défaut (Claude Desktop / Code). Pour le mode hosted
+# (sse / streamable-http), override la commande ; l'hôte 0.0.0.0 rend le port
+# joignable via -p (sans effet en stdio).
 ENV INFINIDEX_URL=http://host.docker.internal:58000 \
-    INFINIDEX_MCP_TRANSPORT=stdio
+    INFINIDEX_MCP_TRANSPORT=stdio \
+    INFINIDEX_MCP_HOST=0.0.0.0
 
 ENTRYPOINT ["infinidex-mcp"]
