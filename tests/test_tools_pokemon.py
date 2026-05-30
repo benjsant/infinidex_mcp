@@ -106,13 +106,34 @@ async def test_search_pokemon(settings, respx_mock):
     assert route.calls.last.request.url.params["q"] == "pika"
 
 
-async def test_list_pokemon(settings, respx_mock):
+async def test_list_pokemon_with_total(settings, respx_mock):
     respx_mock.get(f"{BASE_URL}/pokemon/").mock(
         return_value=httpx.Response(200, json=[PIKACHU_LIST_ITEM])
     )
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(return_value=httpx.Response(200, json=572))
     mcp = build_server(settings)
     out = await call_tool(mcp, "list_pokemon", {"limit": 10, "offset": 0})
     assert out["count"] == 1
+    assert out["total"] == 572
+
+
+async def test_list_pokemon_passes_filters(settings, respx_mock):
+    list_route = respx_mock.get(f"{BASE_URL}/pokemon/").mock(
+        return_value=httpx.Response(200, json=[PIKACHU_LIST_ITEM])
+    )
+    count_route = respx_mock.get(f"{BASE_URL}/pokemon/count").mock(
+        return_value=httpx.Response(200, json=51)
+    )
+    mcp = build_server(settings)
+    out = await call_tool(
+        mcp, "list_pokemon", {"type_id": 4, "min_bst": 400, "sort_by": "bst_desc"}
+    )
+    assert out["total"] == 51
+    lp = list_route.calls.last.request.url.params
+    assert lp["type_id"] == "4" and lp["min_bst"] == "400" and lp["sort_by"] == "bst_desc"
+    # count ne reçoit que les filtres (pas limit/offset/sort_by).
+    cp = count_route.calls.last.request.url.params
+    assert cp["type_id"] == "4" and "sort_by" not in cp and "limit" not in cp
 
 
 async def test_get_pokemon_404_raises(settings, respx_mock):

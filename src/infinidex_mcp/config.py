@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # Timeout (secondes) des requêtes HTTP vers InfiniDex.
     http_timeout: float = Field(default=10.0, gt=0)
 
+    # Nombre de tentatives supplémentaires sur erreur transitoire (timeout/5xx).
+    http_retries: int = Field(default=2, ge=0, le=5)
+
+    # Délai de base du backoff exponentiel entre tentatives (secondes).
+    http_backoff: float = Field(default=0.2, ge=0)
+
     @property
     def base_url(self) -> str:
         """URL de base normalisée, sans slash final."""

@@ -16,14 +16,14 @@ n'a **aucune dépendance** sur le runtime InfiniDex — juste son URL.
 
 | Tool | Wrapper InfiniDex |
 |---|---|
-| `get_pokemon` | `GET /pokemon/{id}` |
-| `get_pokemon_by_name` | `GET /pokemon/by-name/{name}` |
-| `search_pokemon` | `GET /pokemon/?name=…` |
-| `list_pokemon` | `GET /pokemon/?limit=…&offset=…` |
+| `get_pokemon` | `GET /pokemon/{id}` (nom EN/FR résolu via `/pokemon/search`) |
+| `search_pokemon` | `GET /pokemon/search?q=…` |
+| `list_pokemon` | `GET /pokemon/?limit&offset&filtres` + `/pokemon/count` (total) |
 | `get_fusion` | `GET /fusion/{head_id}/{body_id}/full` |
 | `get_triple_fusion` | `GET /triple-fusions/{id}` |
-| `search_move` | `GET /moves/?name=…` |
-| `get_move_tutors` | `GET /tutors/by-move/{move_id}` |
+| `search_move` | `GET /moves/search?q=…` |
+| `get_move` | `GET /moves/{id}` (détail + description + TM) |
+| `get_move_tutors` | `GET /moves/{id}/tutors` |
 | `get_item` | `GET /items/{id}` |
 
 Chaque tool a un schéma d'entrée/sortie Pydantic v2 strict et une `description`

@@ -22,4 +22,6 @@ def settings() -> Settings:
         api_key=None,
         mcp_transport="stdio",
         http_timeout=2.0,
+        http_retries=0,  # déterministe & rapide par défaut (retry testé séparément)
+        http_backoff=0.0,
     )

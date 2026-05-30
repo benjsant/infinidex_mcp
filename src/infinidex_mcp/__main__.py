@@ -37,11 +37,18 @@ def _build_parser() -> argparse.ArgumentParser:
 
 async def _check(settings) -> int:
     async with InfiniDexClient(settings) as client:
-        ok = await client.ping()
+        status = await client.check()
     target = settings.base_url
-    if ok:
-        print(f"OK: InfiniDex reachable at {target}", file=sys.stderr)
+    if status == "ok":
+        print(f"OK: InfiniDex reachable and authenticated at {target}", file=sys.stderr)
         return 0
+    if status == "unauthorized":
+        print(
+            f"ERROR: InfiniDex reachable at {target} but rejected the request (403). "
+            "Set INFINIDEX_API_KEY to InfiniDex's INTERNAL_API_KEY.",
+            file=sys.stderr,
+        )
+        return 1
     print(f"ERROR: InfiniDex unreachable at {target}", file=sys.stderr)
     return 1
 

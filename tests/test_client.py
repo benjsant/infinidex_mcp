@@ -79,13 +79,43 @@ async def test_api_key_header_sent(respx_mock):
     assert route.calls.last.request.headers["X-Internal-Key"] == "topsecret"
 
 
-async def test_ping_ok(settings, respx_mock):
-    respx_mock.get(f"{BASE_URL}/").mock(return_value=httpx.Response(200))
+async def test_check_ok(settings, respx_mock):
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(return_value=httpx.Response(200, json=572))
     async with InfiniDexClient(settings) as client:
-        assert await client.ping() is True
+        assert await client.check() == "ok"
 
 
-async def test_ping_unreachable(settings, respx_mock):
-    respx_mock.get(f"{BASE_URL}/").mock(side_effect=httpx.ConnectError("down"))
+async def test_check_unauthorized(settings, respx_mock):
+    # 403 = joignable mais clé manquante/invalide (et non « injoignable »).
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(return_value=httpx.Response(403))
     async with InfiniDexClient(settings) as client:
-        assert await client.ping() is False
+        assert await client.check() == "unauthorized"
+
+
+async def test_check_unreachable(settings, respx_mock):
+    respx_mock.get(f"{BASE_URL}/pokemon/count").mock(side_effect=httpx.ConnectError("down"))
+    async with InfiniDexClient(settings) as client:
+        assert await client.check() == "unreachable"
+
+
+async def test_get_retries_then_succeeds(respx_mock):
+    # 1er essai timeout, 2e essai 500, 3e essai OK -> doit réussir.
+    s = Settings(url=HttpUrl(BASE_URL), http_retries=2, http_backoff=0.0)
+    respx_mock.get(f"{BASE_URL}/pokemon/1").mock(
+        side_effect=[
+            httpx.TimeoutException("slow"),
+            httpx.Response(500),
+            httpx.Response(200, json={"id": 1}),
+        ]
+    )
+    async with InfiniDexClient(s) as client:
+        assert await client.get("/pokemon/1") == {"id": 1}
+
+
+async def test_get_retries_exhausted(respx_mock):
+    s = Settings(url=HttpUrl(BASE_URL), http_retries=1, http_backoff=0.0)
+    respx_mock.get(f"{BASE_URL}/pokemon/1").mock(return_value=httpx.Response(503))
+    async with InfiniDexClient(s) as client:
+        with pytest.raises(McpError) as exc:
+            await client.get("/pokemon/1")
+    assert exc.value.error.code == INTERNAL_ERROR

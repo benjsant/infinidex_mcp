@@ -36,6 +36,44 @@ async def test_search_move(settings, respx_mock):
     assert route.calls.last.request.url.params["q"] == "thunder"
 
 
+async def test_get_move_detail_by_id(settings, respx_mock):
+    respx_mock.get(f"{BASE_URL}/moves/85").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                **MOVE_ITEM,
+                "description_en": "A strong electric attack.",
+                "description_fr": "Une puissante attaque électrique.",
+                "source": "base",
+                "tm": {
+                    "number": 24,
+                    "location_summary": "Celadon Dept.",
+                    "locations": [
+                        {"location_id": 1, "location_name_en": "Celadon Dept.", "notes": None}
+                    ],
+                },
+            },
+        )
+    )
+    mcp = build_server(settings)
+    out = await call_tool(mcp, "get_move", {"move": 85})
+    assert out["description_en"].startswith("A strong")
+    assert out["tm"]["number"] == 24
+    assert out["tm"]["locations"][0]["location_name_en"] == "Celadon Dept."
+
+
+async def test_get_move_detail_by_name(settings, respx_mock):
+    respx_mock.get(f"{BASE_URL}/moves/search").mock(
+        return_value=httpx.Response(200, json=[MOVE_ITEM])
+    )
+    respx_mock.get(f"{BASE_URL}/moves/85").mock(
+        return_value=httpx.Response(200, json={**MOVE_ITEM, "tm": None})
+    )
+    mcp = build_server(settings)
+    out = await call_tool(mcp, "get_move", {"move": "Thunderbolt"})
+    assert out["id"] == 85 and out["tm"] is None
+
+
 async def test_get_move_tutors_by_id(settings, respx_mock):
     respx_mock.get(f"{BASE_URL}/moves/85/tutors").mock(
         return_value=httpx.Response(

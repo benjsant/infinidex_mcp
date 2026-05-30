@@ -1,7 +1,8 @@
-"""Tools attaques : search_move, get_move_tutors.
+"""Tools attaques : search_move, get_move, get_move_tutors.
 
 Schémas calés sur l'API réelle :
   - GET /moves/search?q=        -> list[MoveListItem]
+  - GET /moves/{move_id}        -> MoveDetail (descriptions + infos TM)
   - GET /moves/{move_id}/tutors -> list[MoveTutorOut]  (tuteurs classiques)
 """
 
@@ -14,8 +15,8 @@ from mcp.shared.exceptions import McpError
 from mcp.types import INVALID_PARAMS, ErrorData
 from pydantic import Field
 
-from ..config import Settings
-from ._base import OutBase, client_for, is_id
+from ..client import InfiniDexClient
+from ._base import OutBase, _best_match, is_id
 
 
 class TypeRef(OutBase):
@@ -45,6 +46,30 @@ class MoveList(OutBase):
     results: list[MoveSummary] = Field(default_factory=list)
 
 
+class TMLocationOut(OutBase):
+    location_id: int | None = None
+    location_name_en: str | None = None
+    location_name_fr: str | None = None
+    notes: str | None = None
+
+
+class TMInfoOut(OutBase):
+    """Infos CT/TM si l'attaque en est une."""
+
+    number: int = Field(description="Numéro de la TM (1 = TM01)")
+    location_summary: str | None = None
+    locations: list[TMLocationOut] = Field(default_factory=list)
+
+
+class MoveDetailOut(MoveSummary):
+    """Détail complet d'une attaque (mappe `MoveDetail`)."""
+
+    description_en: str | None = None
+    description_fr: str | None = None
+    source: str | None = Field(default=None, description="base | infinite_fusion")
+    tm: TMInfoOut | None = Field(default=None, description="Infos TM, null si l'attaque n'est pas une TM")
+
+
 class MoveTutorOut(OutBase):
     """Tuteur classique enseignant une attaque (mappe `MoveTutorOut`)."""
 
@@ -68,7 +93,7 @@ class MoveTutorsOut(OutBase):
     tutors: list[MoveTutorOut] = Field(default_factory=list)
 
 
-async def _resolve_move_id(client, name_or_id: str | int) -> int:
+async def _resolve_move_id(client: InfiniDexClient, name_or_id: str | int) -> int:
     """Résout un nom d'attaque (EN/FR) ou un id vers un id de move."""
     if is_id(name_or_id):
         return int(name_or_id)
@@ -78,35 +103,39 @@ async def _resolve_move_id(client, name_or_id: str | int) -> int:
         raise McpError(
             ErrorData(code=INVALID_PARAMS, message=f"No move matching name '{needle}'")
         )
-    low = needle.lower()
-    best = next(
-        (
-            m
-            for m in matches
-            if (m.get("name_en") or "").lower() == low
-            or (m.get("name_fr") or "").lower() == low
-        ),
-        matches[0],
-    )
-    return int(best["id"])
+    return int(_best_match(matches, needle)["id"])
 
 
-def register(mcp: FastMCP, settings: Settings) -> None:
+def register(mcp: FastMCP, client: InfiniDexClient) -> None:
     """Enregistre les tools d'attaques sur le serveur MCP."""
 
     @mcp.tool(
         description=(
             "Search moves by name (English or French, accent-insensitive). Returns "
-            "lightweight matches with type, category, power, accuracy and PP. Use "
-            "to find a move's id or basic data. Query needs at least 1 char."
+            "lightweight matches with type, category, power, accuracy and PP (no "
+            "description). Use to find a move's id, then get_move for full detail."
         )
     )
     async def search_move(
         name: Annotated[str, Field(description="Full or partial move name", min_length=1)],
     ) -> MoveList:
-        async with client_for(settings) as client:
-            data = await client.get("/moves/search", params={"q": name})
+        data = await client.get("/moves/search", params={"q": name})
         return MoveList(count=len(data), results=data)
+
+    @mcp.tool(
+        description=(
+            "Get the full detail of a move by id OR name (EN/FR): type, category, "
+            "power, accuracy, PP, in-game description (EN/FR), and TM info (number "
+            "and where to find it) if the move is a TM. Use when the user asks what "
+            "a move does."
+        )
+    )
+    async def get_move(
+        move: Annotated[str | int, Field(description="Move id or name (EN/FR)")],
+    ) -> MoveDetailOut:
+        move_id = await _resolve_move_id(client, move)
+        data = await client.get(f"/moves/{move_id}")
+        return MoveDetailOut.model_validate(data)
 
     @mcp.tool(
         description=(
@@ -118,7 +147,6 @@ def register(mcp: FastMCP, settings: Settings) -> None:
     async def get_move_tutors(
         move: Annotated[str | int, Field(description="Move id or name (EN/FR)")],
     ) -> MoveTutorsOut:
-        async with client_for(settings) as client:
-            move_id = await _resolve_move_id(client, move)
-            data = await client.get(f"/moves/{move_id}/tutors")
+        move_id = await _resolve_move_id(client, move)
+        data = await client.get(f"/moves/{move_id}/tutors")
         return MoveTutorsOut(move_id=move_id, count=len(data), tutors=data)
